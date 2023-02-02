@@ -35,7 +35,13 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Run tests
-      run: cargo test --test integration_test
+      run: |
+        export SFDC_CLIENT_ID="$SFDC_CLIENT_ID"
+        export SFDC_CLIENT_SECRET="$SFDC_CLIENT_SECRET"
+        export SFDC_USERNAME="$SFDC_USERNAME"
+        export SFDC_PASSWORD="$SFDC_PASSWORD"
+        echo "Running Integration Tests with user $SFDC_USERNAME"
+        cargo test --test integration_test
 
     
     
