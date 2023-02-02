@@ -1,6 +1,6 @@
 [![crate-name at crates.io](https://img.shields.io/crates/v/rust_sync_force.svg)](https://crates.io/crates/rust_sync_force)
 [![crate-name at docs.rs](https://docs.rs/rust_sync_force/badge.svg)](https://docs.rs/rust_sync_force)
-![Rust](https://github.com/0cv/rust_sync_force/workflows/Rust/badge.svg)
+[![Rust](https://github.com/0cv/rust_sync_force/actions/workflows/rust.yml/badge.svg)](https://github.com/0cv/rust_sync_force/actions/workflows/rust.yml)
 
 ## Rust Sync Force
 
