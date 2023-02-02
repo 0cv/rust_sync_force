@@ -15,9 +15,6 @@ pub enum Error {
 
     #[error("Input Output Error {0}")]
     IOError(#[from] ::std::io::Error),
-
-    #[error("Deserializing Error {0}")]
-    DeserializingError(#[from] ::serde_json::Error),
 }
 
 
