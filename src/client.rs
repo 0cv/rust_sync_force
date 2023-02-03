@@ -266,10 +266,8 @@ impl Client {
             json.records.append(&mut recursive_json.records);
             json.next_records_url = recursive_json.next_records_url;
             json.done = recursive_json.done;
-            Ok(json)
-        } else {
-            Ok(json)
         }
+        Ok(json)
     }
 
     /// Find records using SOSL
