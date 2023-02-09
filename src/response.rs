@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
@@ -11,9 +11,51 @@ pub struct QueryResponse<T> {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct CreateResponse {
+pub struct UpsertResponse {
     pub id: String,
     pub success: bool,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CompositeResponse {
+    pub id: Option<String>,
+    pub success: bool,
+    pub errors: Vec<RecordErrorResponse>
+}
+
+#[derive(Serialize, Debug)]
+pub struct RecordRequestAttribute {
+    #[serde(rename = "type")]
+    pub sobject_type: String,
+}
+#[derive(Serialize, Debug)]
+pub struct RecordRequest<T> {
+    pub attributes: RecordRequestAttribute,
+    #[serde(flatten)]
+    pub record: T,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CompositeBodyRequest<T> {
+    pub all_or_none: bool,
+    pub records: Vec<T>
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RecordsResponse {
+    pub id: String,
+    pub success: bool,
+    pub created: Option<bool>,
+    pub errors: RecordErrorResponse,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordErrorResponse {
+    pub message: String,
+    pub status_code: String,
+    pub fields: Vec<String>,
 }
 
 #[derive(Deserialize, Debug)]

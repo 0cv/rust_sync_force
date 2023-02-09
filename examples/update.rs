@@ -1,25 +1,7 @@
 use rust_sync_force::{Client, Error};
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-#[allow(dead_code)]
-struct Account {
-    #[serde(rename = "attributes")]
-    attributes: Attribute,
-    id: String,
-    name: String,
-}
-
-#[derive(Deserialize, Debug)]
-#[allow(dead_code)]
-struct Attribute {
-    url: String,
-    #[serde(rename = "type")]
-    sobject_type: String,
-}
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() -> Result<(), Error> {
     let client_id = env::var("SFDC_CLIENT_ID").unwrap();
@@ -30,11 +12,27 @@ fn main() -> Result<(), Error> {
     let mut client = Client::new(Some(client_id), Some(client_secret));
     client.login_with_credential(username, password)?;
 
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    let account_name = format!("Hello Rust {}", nanos);
+
     let mut params = HashMap::new();
-    params.insert("Name", "hello rust");
-    let res = client
-        .update("Account", "0012K00001drfGYQAY", params)?;
-    println!("{:?}", res);
+    params.insert("Name", &account_name);
+
+    let acc = client.insert("Account", params)?;
+
+    println!("Account inserted: {:?}", acc);
+
+    let account_name = format!("{} - new", account_name);
+
+    let mut params = HashMap::new();
+    params.insert("Name", account_name);
+    let acc = client
+        .update("Account", &acc.id, params)?;
+
+    println!("Account updated: {:?}", acc);
 
     Ok(())
 }

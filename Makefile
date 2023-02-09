@@ -1,9 +1,7 @@
-BIN="apexrest"
-
 .PHONY: run test build
 
-run:
-	cargo run --example $(BIN)
+run_%:
+	cargo run --example $*
 
 test:
 	cargo test --lib

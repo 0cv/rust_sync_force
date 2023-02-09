@@ -1,7 +1,7 @@
 use crate::errors::Error;
 use crate::response::{
-    AccessToken, CreateResponse, DescribeGlobalResponse, ErrorResponse,
-    QueryResponse, SearchResponse, TokenErrorResponse, TokenResponse, VersionResponse,
+    AccessToken, UpsertResponse, CompositeResponse, DescribeGlobalResponse, ErrorResponse,
+    QueryResponse, CompositeBodyRequest, SearchResponse, TokenErrorResponse, TokenResponse, VersionResponse,
 };
 use crate::utils::substring_before;
 
@@ -23,7 +23,7 @@ pub struct Client {
 }
 
 impl Client {
-    /// Creates a new client when passed a Client ID and Client Secret. These
+    /// Inserts a new client when passed a Client ID and Client Secret. These
     /// can be obtained by creating a connected app in Salesforce
     pub fn new(client_id: Option<String>, client_secret: Option<String>) -> Self {
         let http_client = ureq::AgentBuilder::new().build();
@@ -253,10 +253,10 @@ impl Client {
         // Recursive query starts with /services/data/
         let res = if query.starts_with("/services/data/") {
             let query_url = format!("{}{}", self.instance_url.as_ref().unwrap(), query.to_string());
-            self.get(query_url, None)?
+            self.sfdc_get(query_url, None)?
         } else {
             let query_url = format!("{}/{}/", self.base_path(), query_with);
-            self.get(query_url, Some(("q", query)))?
+            self.sfdc_get(query_url, Some(vec![("q", query)]))?
         };
 
         let mut json: QueryResponse<T> = res.into_json()?;
@@ -272,71 +272,130 @@ impl Client {
 
     /// Find records using SOSL
     pub fn search(&self, query: &str) -> Result<SearchResponse, Error> {
-        let query_url = format!("{}/search/", self.base_path());
-        let res = self.get(query_url, Some(("q", query)))?;
+        let res = self.sfdc_get(
+            format!(
+                "{}/search/", 
+                self.base_path()
+            ),
+            Some(vec![("q", query)]))?;
         Ok(res.into_json()?)
     }
 
     /// Get all supported API versions
     pub fn versions(&self) -> Result<Vec<VersionResponse>, Error> {
-        let versions_url = format!(
-            "{}/services/data/",
-            self.instance_url.as_ref().ok_or(Error::NotLoggedIn)?
-        );
-        let res = self.get(versions_url, None)?;
+        let res = self.sfdc_get(
+            format!(
+                "{}/services/data/",
+                self.instance_url.as_ref().ok_or(Error::NotLoggedIn)?
+            ),
+            None
+        )?;
         Ok(res.into_json()?)
     }
 
     /// Finds a record by ID
     pub fn find_by_id<T: DeserializeOwned>(
         &self,
-        sobject_name: &str,
+        sobject_type: &str,
         id: &str,
     ) -> Result<T, Error> {
-        let resource_url = format!("{}/sobjects/{}/{}", self.base_path(), sobject_name, id);
-        let res = self.get(resource_url, None)?;
+        let res = self.sfdc_get(
+            format!(
+                "{}/sobjects/{}/{}", 
+                self.base_path(), 
+                sobject_type, 
+                id
+            ), 
+            None
+        )?;
         Ok(res.into_json()?)
     }
 
-    /// Creates an SObject
-    pub fn create<T: Serialize>(
+    /// Insert an SObject
+    pub fn insert<T: Serialize>(
         &self,
-        sobject_name: &str,
+        sobject_type: &str,
         params: T,
-    ) -> Result<CreateResponse, Error> {
-        let resource_url = format!("{}/sobjects/{}", self.base_path(), sobject_name);
-        let res = self.post(resource_url, params)?;
+    ) -> Result<UpsertResponse, Error> {
+        let res = self.sfdc_post(
+            format!(
+                "{}/sobjects/{}", 
+                self.base_path(), 
+                sobject_type
+            ), 
+            params)?;
+        Ok(res.into_json()?)
+    }
+
+    /// Insert multiple SObjects
+    pub fn inserts<T: Serialize>(
+        &self,
+        all_or_none: bool,
+        records: Vec<T>,
+    ) -> Result<Vec<CompositeResponse>, Error> {
+        let res = self.sfdc_post(
+            format!(
+                "{}/composite/sobjects", 
+                self.base_path(),
+            ), 
+            self.get_composite_body_request(all_or_none, records)
+        )?;
         Ok(res.into_json()?)
     }
 
     /// Updates an SObject
     pub fn update<T: Serialize>(
         &self,
-        sobject_name: &str,
+        sobject_type: &str,
         id: &str,
         params: T,
     ) -> Result<(), Error> {
-        let resource_url = format!("{}/sobjects/{}/{}", self.base_path(), sobject_name, id);
-        self.patch(resource_url, params)?;
+        self.sfdc_patch(
+            format!(
+                "{}/sobjects/{}/{}", 
+                self.base_path(), 
+                sobject_type, 
+                id
+            ), 
+            params
+        )?;
         Ok(())
+    }
+
+    /// Updates multiple SObjects
+    pub fn updates<T: Serialize>(
+        &self,
+        all_or_none: bool,
+        records: Vec<T>,
+    ) -> Result<Vec<CompositeResponse>, Error> {
+        let res = self.sfdc_patch(
+            format!(
+                "{}/composite/sobjects", 
+                self.base_path(),
+            ), 
+            self.get_composite_body_request(all_or_none, records)
+        )?;
+        Ok(res.into_json()?)
     }
 
     /// Upserts an SObject with key
     pub fn upsert<T: Serialize>(
         &self,
-        sobject_name: &str,
+        sobject_type: &str,
         key_name: &str,
         key: &str,
         params: T,
-    ) -> Result<Option<CreateResponse>, Error> {
-        let resource_url = format!(
-            "{}/sobjects/{}/{}/{}",
-            self.base_path(),
-            sobject_name,
-            key_name,
-            key
-        );
-        let res = self.patch(resource_url, params)?;
+    ) -> Result<Option<UpsertResponse>, Error> {
+        let res = self.sfdc_patch(
+            format!(
+                "{}/sobjects/{}/{}/{}",
+                self.base_path(),
+                sobject_type,
+                key_name,
+                key
+            ), 
+            params,
+        )?;
 
         match res.status() {
             201 => Ok(res.into_json()?),
@@ -344,134 +403,158 @@ impl Client {
         }
     }
 
+    /// Upserts multiple SObjects with key
+    pub fn upserts<T: Serialize>(
+        &self,
+        all_or_none: bool,
+        sobject_type: &str,
+        key_name: &str,
+        records: Vec<T>,
+    ) -> Result<Vec<CompositeResponse>, Error> {
+        let res = self.sfdc_patch(
+            format!(
+                "{}/composite/sobjects/{}/{}", 
+                self.base_path(), 
+                sobject_type, 
+                key_name,
+            ), 
+            self.get_composite_body_request(all_or_none, records)
+        )?;
+        Ok(res.into_json()?)
+    }
+
+    fn get_composite_body_request<T>(&self, all_or_none: bool, records: Vec<T>) -> CompositeBodyRequest<T> {
+        CompositeBodyRequest {
+            all_or_none: all_or_none,
+            records: records.into()
+        }
+    }
+
     /// Deletes an SObject
-    pub fn destroy(&self, sobject_name: &str, id: &str) -> Result<(), Error> {
-        let resource_url = format!("{}/sobjects/{}/{}", self.base_path(), sobject_name, id);
-        self.delete(resource_url)?;
+    pub fn delete(&self, sobject_type: &str, id: &str) -> Result<(), Error> {
+        let resource_url = format!("{}/sobjects/{}/{}", self.base_path(), sobject_type, id);
+        self.sfdc_delete(resource_url, None)?;
         Ok(())
+    }
+
+    /// Deletes multiple SObjects
+    pub fn deletes(&self, all_or_none: bool, ids: Vec<String>) -> Result<Vec<CompositeResponse>, Error> {
+        let resource_url = format!("{}/composite/sobjects", self.base_path());
+        let res = self.sfdc_delete(
+            resource_url, 
+            Some(vec![
+                ("ids", &ids.join(",")),
+                ("allOrNone", &all_or_none.to_string()),
+            ]))?;
+        Ok(res.into_json()?)
     }
 
     /// Describes all objects
     pub fn describe_global(&self) -> Result<DescribeGlobalResponse, Error> {
         let resource_url = format!("{}/sobjects/", self.base_path());
-        let res = self.get(resource_url, None)?;
+        let res = self.sfdc_get(resource_url, None)?;
         Ok(res.into_json()?)
     }
 
     /// Describes specific object
-    pub fn describe(&self, sobject_name: &str) -> Result<String, Error> {
-        let resource_url = format!("{}/sobjects/{}/describe", self.base_path(), sobject_name);
-        let res = self.get(resource_url, None)?;
+    pub fn describe(&self, sobject_type: &str) -> Result<String, Error> {
+        let resource_url = format!("{}/sobjects/{}/describe", self.base_path(), sobject_type);
+        let res = self.sfdc_get(resource_url, None)?;
         Ok(res.into_string()?)
     }
 
-    pub fn rest_get(
-        &self,
-        path: String,
-        params: Option<(&str, &str)>,
+    pub fn sfdc_get(
+        &self, 
+        url_or_path: String, 
+        params: Option<Vec<(&str, &str)>>,
     ) -> Result<Response, Error> {
-        let url = format!("{}{}", self.instance_url.as_ref().unwrap(), path);
-        let req = self
+        let mut req = self
             .http_client
-            .get(url.as_str())
+            .get(&self.get_sfdc_url(url_or_path))
             .set("Authorization", &self.get_auth()?);
-        
+
         let req = if let Some(params) = params {
-            req.to_owned().query(&params.0, &params.1)
+            for param in params.into_iter() {
+                req = req.query(&param.0, &param.1);
+            }
+            req
         } else {
             req
         };
+
         Ok(req.call()?)
     }
 
-    pub fn rest_post<T: Serialize>(
-        &self,
-        path: String,
-        params: T,
+    pub fn sfdc_post<T: Serialize>(
+        &self, 
+        url_or_path: String, 
+        body: T,
     ) -> Result<Response, Error> {
-        let url = format!("{}{}", self.instance_url.as_ref().unwrap(), path);
         let res = self
             .http_client
-            .post(url.as_str())
+            .post(&self.get_sfdc_url(url_or_path))
             .set("Authorization", &self.get_auth()?)
-            .send_json(&params)?;
+            .send_json(&body)?;
+
         Ok(res)
     }
 
-    pub fn rest_patch<T: Serialize>(
-        &self,
-        path: String,
-        params: T,
+    pub fn sfdc_patch<T: Serialize>(
+        &self, 
+        url_or_path: String, 
+        body: T,
     ) -> Result<Response, Error> {
-        let url = format!("{}{}", self.instance_url.as_ref().unwrap(), path);
         let res = self
             .http_client
-            .patch(url.as_str())
+            .patch(&self.get_sfdc_url(url_or_path))
             .set("Authorization", &self.get_auth()?)
-            .send_json(&params)?;
+            .send_json(&body)?;
+
         Ok(res)
     }
 
-    pub fn rest_put<T: Serialize>(&self, path: String, params: T) -> Result<Response, Error> {
-        let url = format!("{}{}", self.instance_url.as_ref().unwrap(), path);
+    pub fn sfdc_put<T: Serialize>(
+        &self, 
+        url_or_path: String, 
+        body: T,
+    ) -> Result<Response, Error> {
         let res = self
             .http_client
-            .put(url.as_str())
+            .put(&self.get_sfdc_url(url_or_path))
             .set("Authorization", &self.get_auth()?)
-            .send_json(&params)?;
+            .send_json(&body)?;
+
         Ok(res)
     }
 
-    pub fn rest_delete(&self, path: String) -> Result<Response, Error> {
-        let url = format!("{}{}", self.instance_url.as_ref().unwrap(), path);
-        let res = self
+    pub fn sfdc_delete(
+        &self, 
+        url_or_path: String, 
+        params: Option<Vec<(&str, &str)>>,
+    ) -> Result<Response, Error> {
+        let mut req = self
             .http_client
-            .delete(url.as_str())
-            .set("Authorization", &self.get_auth()?)
-            .call()?;
-        Ok(res)
-    }
-
-    fn get(&self, url: String, params: Option<(&str, &str)>) -> Result<Response, Error> {
-        ureq::AgentBuilder::new().build();
-        let req = self
-            .http_client
-            .get(url.as_str())
+            .delete(&self.get_sfdc_url(url_or_path))
             .set("Authorization", &self.get_auth()?);
-        
+
         let req = if let Some(params) = params {
-            req.to_owned().query(&params.0, &params.1)
+            for param in params.into_iter() {
+                req = req.query(&param.0, &param.1);
+            }
+            req
         } else {
             req
         };
+
         Ok(req.call()?)
     }
 
-    fn post<T: Serialize>(&self, url: String, params: T) -> Result<Response, Error> {
-        let res = self
-            .http_client
-            .post(url.as_str())
-            .set("Authorization", &self.get_auth()?)
-            .send_json(&params)?;
-        Ok(res)
-    }
-
-    fn patch<T: Serialize>(&self, url: String, params: T) -> Result<Response, Error> {
-        let res = self
-            .http_client
-            .patch(url.as_str())
-            .set("Authorization", &self.get_auth()?)
-            .send_json(&params)?;
-        Ok(res)
-    }
-
-    fn delete(&self, url: String) -> Result<Response, Error> {
-        let res = self
-            .http_client
-            .delete(url.as_str())
-            .set("Authorization", &self.get_auth()?)
-            .call()?;
-        Ok(res)
+    fn get_sfdc_url(&self, url_or_path: String) -> String {
+        if url_or_path.starts_with("https://") || url_or_path.starts_with("http://") {
+            url_or_path
+        } else {
+            format!("{}{}", self.instance_url.as_ref().unwrap(), url_or_path)
+        }
     }
 
     fn get_auth(&self) -> Result<String, Error> {
@@ -570,7 +653,7 @@ mod tests {
     }
 
     #[test]
-    fn create() -> Result<(), Error> {
+    fn insert() -> Result<(), Error> {
         let _m = mock("POST", "/services/data/v56.0/sobjects/Account")
             .with_status(201)
             .with_header("content-type", "application/json")
@@ -585,7 +668,7 @@ mod tests {
 
         let client = create_test_client();
         let r = client
-            .create("Account", [("Name", "foo"), ("Abc__c", "123")])?;
+            .insert("Account", [("Name", "foo"), ("Abc__c", "123")])?;
         assert_eq!("12345", r.id);
         assert_eq!(true, r.success);
 
@@ -666,14 +749,14 @@ mod tests {
     }
 
     #[test]
-    fn destroy() -> Result<(), Error> {
+    fn delete() -> Result<(), Error> {
         let _m = mock("DELETE", "/services/data/v56.0/sobjects/Account/123")
             .with_status(204)
             .with_header("content-type", "application/json")
             .create();
 
         let client = create_test_client();
-        let r = client.destroy("Account", "123")?;
+        let r = client.delete("Account", "123")?;
         println!("{:?}", r);
 
         Ok(())

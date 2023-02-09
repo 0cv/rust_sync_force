@@ -1,29 +1,9 @@
 use rust_sync_force::{Client, Error};
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-#[allow(dead_code)]
-struct Account {
-    #[serde(rename = "attributes")]
-    attributes: Attribute,
-    id: String,
-    name: String,
-}
-
-#[derive(Deserialize, Debug)]
-#[allow(dead_code)]
-struct Attribute {
-    url: String,
-    #[serde(rename = "type")]
-    sobject_type: String,
-}
-
 fn main() -> Result<(), Error> {
-    env_logger::init();
     let client_id = env::var("SFDC_CLIENT_ID").unwrap();
     let client_secret = env::var("SFDC_CLIENT_SECRET").unwrap();
     let username = env::var("SFDC_USERNAME").unwrap();
@@ -40,10 +20,12 @@ fn main() -> Result<(), Error> {
 
     let mut params = HashMap::new();
     params.insert("Name", account_name);
-    let acc = client.insert("Account", params)?;
 
-    let res: Account = client.find_by_id("Account", &acc.id)?;
-    println!("{:?}", res);
+    let res = client.insert("Account", params)?;
+    println!("Account inserted {:?}", res);
+
+    let res = client.delete("Account", &res.id)?;
+    println!("Account deleted {:?}", res);
 
     Ok(())
 }

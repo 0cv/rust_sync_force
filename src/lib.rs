@@ -5,7 +5,7 @@
 //!
 //! # Example
 //!
-//! The following example will connect to Salesforce and create an Account
+//! The following example will connect to Salesforce and insert an Account
 //! object
 //!
 //!
@@ -43,7 +43,7 @@
 //!     let mut params = HashMap::new();
 //!     params.insert("Name", "hello rust");
 
-//!     let res = client.create("Account", params)?;
+//!     let res = client.insert("Account", params)?;
 //!     println!("{:?}", res);
 
 //!     Ok(())

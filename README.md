@@ -4,7 +4,9 @@
 
 ## Rust Sync Force
 
-Salesforce Client for Rust. Sync version of https://github.com/tzmfreedom/rustforce
+Salesforce Client for Rust Sync.
+
+Async version is here https://github.com/tzmfreedom/rustforce
 
 ## Usage
 
@@ -81,31 +83,77 @@ let r: Result<QueryResponse<Account>, Error> = client.query_all("SELECT Id, Name
 let r: Result<Account, Error> = client.find_by_id("Account", "{sf_id}")?;
 ```
 
-### Create Record
+### Insert a Record
 
 ```rust
 let mut params = HashMap::new();
 params.insert("Name", "hello rust");
-let r = client.create("Account", params)?;
+let r = client.insert("Account", params)?;
 println!("{:?}", r);
 ```
 
-### Update Record
+### Insert multiple Records
+
+```rust
+let account1 = Account {
+    name: "account name1".into(),
+    attributes: Attribute { sobject_type: "Account".into() },
+};
+
+let account2 = Account {
+    name: "account name2".into(),
+    attributes: Attribute { sobject_type: "Account".into() },
+};
+
+let r = client.inserts(true, vec![account1, account2])?;
+```
+
+### Update a Record
 
 ```rust
 let r = client.update("Account", "{sobject_id}", params)?;
 ```
 
-### Upsert Record
+### Update multiple Records
 
 ```rust
-let r = client.upsert("Account", "{external_key_name}", "{external_key", params)?;
+let account = Account {
+    id: "account_id".into(),
+    name: "new_name".into(),
+    attributes: Attribute { sobject_type: "Account".into() },
+};
+
+let r = client.updates(true, vec![account])?;
 ```
 
-### Delete Record
+### Upsert a Record
 
 ```rust
-let r = client.destroy("Account", "{sobject_id}")?;
+let r = client.upsert("Account", "external_key_name", "external_key_value", params)?;
+```
+
+### Upsert multiple Records
+
+```rust
+let account = Account {
+    exkey: "external_key_id".into(),
+    name: "new_name".into(),
+    attributes: Attribute { sobject_type: "Account".into() },
+};
+
+let r = client.upserts(true, "Account", "ExKey__c", vec![account])?;
+```
+
+### Delete a Record
+
+```rust
+let r = client.delete("Account", "{sobject_id}")?;
+```
+
+### Delete multiple Records
+
+```rust
+let r = client.deletes(true, vec!["account_id".into()])?;
 ```
 
 ### Describe Global

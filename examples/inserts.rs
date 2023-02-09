@@ -1,21 +1,18 @@
-use rust_sync_force::{response::QueryResponse, Client, Error};
-use serde::Deserialize;
+use rust_sync_force::{Client, Error};
+use serde::Serialize;
 use std::env;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-#[allow(dead_code)]
 struct Account {
     #[serde(rename = "attributes")]
     attributes: Attribute,
-    id: String,
     name: String,
 }
 
-#[derive(Deserialize, Debug)]
-#[allow(dead_code)]
+#[derive(Serialize, Debug)]
 struct Attribute {
-    url: String,
     #[serde(rename = "type")]
     sobject_type: String,
 }
@@ -29,9 +26,21 @@ fn main() -> Result<(), Error> {
     let mut client = Client::new(Some(client_id), Some(client_secret));
     client.login_with_credential(username, password)?;
 
-    let res: QueryResponse<Account> = client
-        .query("select id, Name from Account")?;
-    println!("{:?}", res);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    let account_name = format!("Hello Rust {}", nanos);
+
+    let account = Account {
+        name: account_name,
+        attributes: Attribute { sobject_type: "Account".into() },
+    };
+
+    let res = client
+        .inserts( true, vec![account])?;
+
+    println!("Account inserted: {:?}", res);
 
     Ok(())
 }
