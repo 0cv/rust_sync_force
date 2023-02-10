@@ -1,4 +1,4 @@
-use rust_sync_force::{Client, Error};
+use rust_sync_force::{Client, response::CompositeResponse, Error};
 use serde::Serialize;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -40,7 +40,9 @@ fn main() -> Result<(), Error> {
     let res = client
         .inserts( true, vec![account])?;
 
-    println!("Account inserted: {:?}", res);
+    let vec_result: Result<Vec<CompositeResponse>, rust_sync_force::Error> = res.into_iter().collect();
+
+    println!("Account inserted: {:?}", vec_result?);
 
     Ok(())
 }

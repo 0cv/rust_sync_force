@@ -1,4 +1,4 @@
-use rust_sync_force::{Client, Error};
+use rust_sync_force::{Client, response::CompositeResponse, Error};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::env;
@@ -50,7 +50,9 @@ fn main() -> Result<(), Error> {
     let acc = client
         .updates( true, vec![account])?;
 
-    println!("Account updated: {:?}", acc);
+    let vec_result: Result<Vec<CompositeResponse>, rust_sync_force::Error> = acc.into_iter().collect();
+
+    println!("Account updated: {:?}", vec_result?);
 
     Ok(())
 }

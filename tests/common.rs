@@ -68,7 +68,9 @@ pub fn insert_accounts(client: &Client, names: Vec<String>) -> Result<Vec<Compos
     let res = client
         .inserts( true, accounts)?;
 
-    Ok(res)
+    let vec_result: Result<Vec<CompositeResponse>, rust_sync_force::Error> = res.into_iter().collect();
+
+    Ok(vec_result?)
 }
 
 pub fn update_accounts(client: &Client, vals: Vec<(String, String)>) -> Result<Vec<CompositeResponse>> {
@@ -84,7 +86,9 @@ pub fn update_accounts(client: &Client, vals: Vec<(String, String)>) -> Result<V
     let res = client
         .updates( true, accounts)?;
 
-    Ok(res)
+    let vec_result: Result<Vec<CompositeResponse>, rust_sync_force::Error> = res.into_iter().collect();
+
+    Ok(vec_result?)
 }
 
 pub fn upsert_accounts(client: &Client, vals: Vec<(String, String)>) -> Result<Vec<CompositeResponse>> {
@@ -99,8 +103,10 @@ pub fn upsert_accounts(client: &Client, vals: Vec<(String, String)>) -> Result<V
 
     let res = client
         .upserts( true, "Account", "ExKey__c", accounts)?;
+    
+    let vec_result: Result<Vec<CompositeResponse>, rust_sync_force::Error> = res.into_iter().collect();
 
-    Ok(res)
+    Ok(vec_result?)
 }
 
 pub fn delete_account(client: &Client, id: &str) -> Result<()> {
@@ -112,7 +118,9 @@ pub fn delete_accounts(client: &Client, ids: Vec<String>) -> Result<Vec<Composit
     let res = client
         .deletes( true, ids)?;
 
-    Ok(res)
+    let vec_result: Result<Vec<CompositeResponse>, rust_sync_force::Error> = res.into_iter().collect();
+
+    Ok(vec_result?)
 }
 
 pub fn find_account(client: &Client, id: &str) -> Result<Account> {

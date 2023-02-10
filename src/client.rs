@@ -332,7 +332,7 @@ impl Client {
         &self,
         all_or_none: bool,
         records: Vec<T>,
-    ) -> Result<Vec<CompositeResponse>, Error> {
+    ) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
         let res = self.sfdc_post(
             format!(
                 "{}/composite/sobjects", 
@@ -340,7 +340,8 @@ impl Client {
             ), 
             self.get_composite_body_request(all_or_none, records)
         )?;
-        Ok(res.into_json()?)
+
+        Ok(self.partition_composite_results(res)?)
     }
 
     /// Updates an SObject
@@ -367,7 +368,7 @@ impl Client {
         &self,
         all_or_none: bool,
         records: Vec<T>,
-    ) -> Result<Vec<CompositeResponse>, Error> {
+    ) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
         let res = self.sfdc_patch(
             format!(
                 "{}/composite/sobjects", 
@@ -375,7 +376,8 @@ impl Client {
             ), 
             self.get_composite_body_request(all_or_none, records)
         )?;
-        Ok(res.into_json()?)
+
+        Ok(self.partition_composite_results(res)?)
     }
 
     /// Upserts an SObject with key
@@ -410,7 +412,7 @@ impl Client {
         sobject_type: &str,
         key_name: &str,
         records: Vec<T>,
-    ) -> Result<Vec<CompositeResponse>, Error> {
+    ) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
         let res = self.sfdc_patch(
             format!(
                 "{}/composite/sobjects/{}/{}", 
@@ -420,7 +422,8 @@ impl Client {
             ), 
             self.get_composite_body_request(all_or_none, records)
         )?;
-        Ok(res.into_json()?)
+
+        Ok(self.partition_composite_results(res)?)
     }
 
     fn get_composite_body_request<T>(&self, all_or_none: bool, records: Vec<T>) -> CompositeBodyRequest<T> {
@@ -431,22 +434,57 @@ impl Client {
     }
 
     /// Deletes an SObject
-    pub fn delete(&self, sobject_type: &str, id: &str) -> Result<(), Error> {
+    pub fn delete(
+        &self, 
+        sobject_type: &str, 
+        id: &str,
+    ) -> Result<(), Error> {
         let resource_url = format!("{}/sobjects/{}/{}", self.base_path(), sobject_type, id);
         self.sfdc_delete(resource_url, None)?;
         Ok(())
     }
 
     /// Deletes multiple SObjects
-    pub fn deletes(&self, all_or_none: bool, ids: Vec<String>) -> Result<Vec<CompositeResponse>, Error> {
+    pub fn deletes(
+        &self, 
+        all_or_none: bool, 
+        ids: Vec<String>,
+    ) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
         let resource_url = format!("{}/composite/sobjects", self.base_path());
         let res = self.sfdc_delete(
             resource_url, 
             Some(vec![
                 ("ids", &ids.join(",")),
                 ("allOrNone", &all_or_none.to_string()),
-            ]))?;
-        Ok(res.into_json()?)
+            ]),
+        )?;
+
+        Ok(self.partition_composite_results(res)?)
+    }
+
+    fn partition_composite_results(&self, res: Response) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
+        let status = res.status();
+        let url = res.get_url().to_string();
+
+        let vec_response: Vec<CompositeResponse> = res.into_json()?;
+        let results = vec_response.into_iter().map(|response| {
+            if response.success || response.errors.is_empty() {
+                Ok(response)
+            } else {
+                Err(Error::SfdcError { 
+                    status, 
+                    url: url.to_string(),
+                    sfdc_errors: Some(response.errors.into_iter().map(|error| ErrorResponse{
+                        message: error.message,
+                        error_code: error.status_code,
+                        fields: Some(error.fields),
+                    }).collect()), 
+                    transport_error: None,
+                })
+            }
+        }).collect();
+
+        Ok(results)
     }
 
     /// Describes all objects
