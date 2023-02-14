@@ -22,10 +22,11 @@ impl From<ureq::Error> for Error {
     fn from(e: ureq::Error) -> Self {
         match e {
             ureq::Error::Status(status, response) => {
+                println!("ERROR=>>> {:?}", response.into_string());
                 return Error::SfdcError {
                     status: status,
-                    url: response.get_url().to_string(),
-                    sfdc_errors: Some(response.into_json().unwrap()),
+                    url: "url".into(),//response.get_url().to_string(),
+                    sfdc_errors: Some(vec!()),
                     transport_error: None,
                 }
             }

@@ -614,7 +614,7 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use crate::{errors::Error, response::QueryResponse};
-    use mockito::mock;
+    use mockito::Server as MockServer;
     use serde::{Deserialize, Serialize};
     use serde_json::json;
 
@@ -627,7 +627,8 @@ mod tests {
 
     #[test]
     fn login_with_credentials() -> Result<(), Error> {
-        let _m = mock("POST", "/services/oauth2/token")
+        let mut server = MockServer::new();
+        let _m = server.mock("POST", "/services/oauth2/token")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -644,7 +645,7 @@ mod tests {
             .create();
 
         let mut client = super::Client::new(Some("aaa".to_string()), Some("bbb".to_string()));
-        let url = &mockito::server_url();
+        let url = &MockServer::url(&server);
         client.set_login_endpoint(url);
         client
             .login_with_credential("u".to_string(), "p".to_string())?;
@@ -659,10 +660,12 @@ mod tests {
 
     #[test]
     fn query() -> Result<(), Error> {
-        let _m = mock(
+        let mut server = MockServer::new_with_port(0);
+        let _m = server.mock(
             "GET",
-            "/services/data/v56.0/query/?q=SELECT+Id%2C+Name+FROM+Account",
+            "/services/data/v56.0/query/",
         )
+        .match_query(mockito::Matcher::UrlEncoded("q".into(), "SELECT Id, Name FROM Account".into()))
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(
@@ -680,7 +683,7 @@ mod tests {
         )
         .create();
 
-        let client = create_test_client();
+        let client = create_test_client(&server); 
         let r: QueryResponse<Account> = client.query("SELECT Id, Name FROM Account")?;
         assert_eq!(123, r.total_size);
         assert_eq!(true, r.done);
@@ -692,7 +695,8 @@ mod tests {
 
     #[test]
     fn insert() -> Result<(), Error> {
-        let _m = mock("POST", "/services/data/v56.0/sobjects/Account")
+        let mut server = MockServer::new_with_port(0);
+        let _m = server.mock("POST", "/services/data/v56.0/sobjects/Account")
             .with_status(201)
             .with_header("content-type", "application/json")
             .with_body(
@@ -704,7 +708,7 @@ mod tests {
             )
             .create();
 
-        let client = create_test_client();
+        let client = create_test_client(&server);
         let r = client
             .insert("Account", [("Name", "foo"), ("Abc__c", "123")])?;
         assert_eq!("12345", r.id);
@@ -715,12 +719,13 @@ mod tests {
 
     #[test]
     fn update() -> Result<(), Error> {
-        let _m = mock("PATCH", "/services/data/v56.0/sobjects/Account/123")
+        let mut server = MockServer::new_with_port(0);
+        let _m = server.mock("PATCH", "/services/data/v56.0/sobjects/Account/123")
             .with_status(204)
             .with_header("content-type", "application/json")
             .create();
 
-        let client = create_test_client();
+        let client = create_test_client(&server);
         let r = client
             .update("Account", "123", [("Name", "foo"), ("Abc__c", "123")]);
         assert_eq!(true, r.is_ok());
@@ -730,7 +735,8 @@ mod tests {
 
     #[test]
     fn upsert_201() -> Result<(), Error> {
-        let _m = mock(
+        let mut server = MockServer::new_with_port(0);
+        let _m = server.mock(
             "PATCH",
             "/services/data/v56.0/sobjects/Account/ExKey__c/123",
         )
@@ -745,7 +751,7 @@ mod tests {
         )
         .create();
 
-        let client = create_test_client();
+        let client = create_test_client(&server);
         let r = client
             .upsert(
                 "Account",
@@ -764,7 +770,8 @@ mod tests {
 
     #[test]
     fn upsert_204() -> Result<(), Error> {
-        let _m = mock(
+        let mut server = MockServer::new_with_port(0);
+        let _m = server.mock(
             "PATCH",
             "/services/data/v56.0/sobjects/Account/ExKey__c/123",
         )
@@ -772,7 +779,7 @@ mod tests {
         .with_header("content-type", "application/json")
         .create();
 
-        let client = create_test_client();
+        let client = create_test_client(&server);
         let r = client
             .upsert(
                 "Account",
@@ -788,12 +795,13 @@ mod tests {
 
     #[test]
     fn delete() -> Result<(), Error> {
-        let _m = mock("DELETE", "/services/data/v56.0/sobjects/Account/123")
+        let mut server = MockServer::new_with_port(0);
+        let _m = server.mock("DELETE", "/services/data/v56.0/sobjects/Account/123")
             .with_status(204)
             .with_header("content-type", "application/json")
             .create();
 
-        let client = create_test_client();
+        let client = create_test_client(&server);
         let r = client.delete("Account", "123")?;
         println!("{:?}", r);
 
@@ -802,7 +810,8 @@ mod tests {
 
     #[test]
     fn versions() -> Result<(), Error> {
-        let _m = mock("GET", "/services/data/")
+        let mut server = MockServer::new_with_port(0);
+        let _m = server.mock("GET", "/services/data/")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -815,7 +824,7 @@ mod tests {
             )
             .create();
 
-        let client = create_test_client();
+        let client = create_test_client(&server);
         let r = client.versions()?;
         assert_eq!("Winter '19", r[0].label);
         assert_eq!("https://ap.salesforce.com/services/data/v56.0/", r[0].url);
@@ -826,7 +835,8 @@ mod tests {
 
     #[test]
     fn find_by_id() -> Result<(), Error> {
-        let _m = mock("GET", "/services/data/v56.0/sobjects/Account/123")
+        let mut server = MockServer::new_with_port(0);
+        let _m = server.mock("GET", "/services/data/v56.0/sobjects/Account/123")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -838,17 +848,17 @@ mod tests {
             )
             .create();
 
-        let client = create_test_client();
+        let client = create_test_client(&server);
         let r: Account = client.find_by_id("Account", "123")?;
         assert_eq!("foo", r.name);
 
         Ok(())
     }
 
-    fn create_test_client() -> super::Client {
+    fn create_test_client(server: &MockServer) -> super::Client {
         let mut client = super::Client::new(Some("aaa".to_string()), Some("bbb".to_string()));
-        let url = &mockito::server_url();
-        client.set_instance_url(url);
+        let url = MockServer::url(&server);
+        client.set_instance_url(&url);
         client.set_access_token("this_is_access_token");
         return client;
     }
