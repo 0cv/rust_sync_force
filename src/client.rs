@@ -1,15 +1,15 @@
 use crate::errors::Error;
 use crate::response::{
-    AccessToken, UpsertResponse, CompositeResponse, DescribeGlobalResponse, ErrorResponse,
-    QueryResponse, CompositeBodyRequest, SearchResponse, TokenErrorResponse, TokenResponse, VersionResponse,
+    AccessToken, CompositeBodyRequest, CompositeResponse, DescribeGlobalResponse, ErrorResponse,
+    QueryResponse, SearchResponse, TokenErrorResponse, TokenResponse, UpsertResponse,
+    VersionResponse,
 };
 use crate::utils::substring_before;
 
 use regex::Regex;
-use ureq::Response;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-
+use ureq::Response;
 
 /// Represents a Salesforce Client
 pub struct Client {
@@ -106,11 +106,7 @@ impl Client {
             ("password", &password),
         ];
 
-        match self
-            .http_client
-            .post(&token_url)
-            .send_form(&params) {
-
+        match self.http_client.post(&token_url).send_form(&params) {
             Ok(res) => {
                 let r: TokenResponse = res.into_json()?;
                 self.access_token = Some(AccessToken {
@@ -132,21 +128,23 @@ impl Client {
                         message: error_response.error_description,
                         error_code: error_response.error,
                         fields: None,
-                    }])
+                    }]),
                 })
             }
-            Err(ureq::Error::Transport(transport)) => {
-                Err(Error::SfdcError {
-                    status: 0,
-                    url: transport.url().unwrap().to_string(),
-                    transport_error: Some(transport.to_string()),
-                    sfdc_errors: None
-                })
-            }
+            Err(ureq::Error::Transport(transport)) => Err(Error::SfdcError {
+                status: 0,
+                url: transport.url().unwrap().to_string(),
+                transport_error: Some(transport.to_string()),
+                sfdc_errors: None,
+            }),
         }
     }
 
-    pub fn login_by_soap(&mut self, username: String, password: String) -> Result<&mut Self, Error> {
+    pub fn login_by_soap(
+        &mut self,
+        username: String,
+        password: String,
+    ) -> Result<&mut Self, Error> {
         let token_url = format!(
             "{login_endpoint}/services/Soap/u/{version}",
             login_endpoint = self.login_endpoint,
@@ -169,8 +167,8 @@ impl Client {
             .post(token_url.as_str())
             .set("Content-Type", "text/xml")
             .set("SOAPAction", "\"\"")
-            .send_string(&body) {
-            
+            .send_string(&body)
+        {
             Ok(res) => {
                 let body_response = res.into_string()?;
                 let re_access_token = Regex::new(r"<sessionId>([^<]+)</sessionId>").unwrap();
@@ -225,17 +223,15 @@ impl Client {
                                 .as_str(),
                         ),
                         fields: None,
-                    }])
+                    }]),
                 })
             }
-            Err(ureq::Error::Transport(transport)) => {
-                Err(Error::SfdcError {
-                    status: 0,
-                    url: transport.url().unwrap().to_string(),
-                    transport_error: Some(transport.to_string()),
-                    sfdc_errors: None
-                })
-            }
+            Err(ureq::Error::Transport(transport)) => Err(Error::SfdcError {
+                status: 0,
+                url: transport.url().unwrap().to_string(),
+                transport_error: Some(transport.to_string()),
+                sfdc_errors: None,
+            }),
         }
     }
 
@@ -249,15 +245,27 @@ impl Client {
         self.query_with(query, "queryAll")
     }
 
-    fn query_with<T: DeserializeOwned>(&self, query: &str, query_with: &str) -> Result<QueryResponse<T>, Error> {
+    fn query_with<T: DeserializeOwned>(
+        &self,
+        query: &str,
+        query_with: &str,
+    ) -> Result<QueryResponse<T>, Error> {
         // Recursive query starts with /services/data/
         let res = if query.starts_with("/services/data/") {
-            let query_url = format!("{}{}", self.instance_url.as_ref().unwrap(), query.to_string());
+            let query_url = format!(
+                "{}{}",
+                self.instance_url.as_ref().unwrap(),
+                query.to_string()
+            );
             self.sfdc_get(query_url, None)?
         } else {
             let query_url = format!("{}/{}/", self.base_path(), query_with);
             self.sfdc_get(query_url, Some(vec![("q", query)]))?
         };
+
+        // println!("ReS => {:?}", res.into_string()?);
+
+        // Err(Error::NotLoggedIn)
 
         let mut json: QueryResponse<T> = res.into_json()?;
         if !json.done {
@@ -273,11 +281,9 @@ impl Client {
     /// Find records using SOSL
     pub fn search(&self, query: &str) -> Result<SearchResponse, Error> {
         let res = self.sfdc_get(
-            format!(
-                "{}/search/", 
-                self.base_path()
-            ),
-            Some(vec![("q", query)]))?;
+            format!("{}/search/", self.base_path()),
+            Some(vec![("q", query)]),
+        )?;
         Ok(res.into_json()?)
     }
 
@@ -288,7 +294,7 @@ impl Client {
                 "{}/services/data/",
                 self.instance_url.as_ref().ok_or(Error::NotLoggedIn)?
             ),
-            None
+            None,
         )?;
         Ok(res.into_json()?)
     }
@@ -300,13 +306,8 @@ impl Client {
         id: &str,
     ) -> Result<T, Error> {
         let res = self.sfdc_get(
-            format!(
-                "{}/sobjects/{}/{}", 
-                self.base_path(), 
-                sobject_type, 
-                id
-            ), 
-            None
+            format!("{}/sobjects/{}/{}", self.base_path(), sobject_type, id),
+            None,
         )?;
         Ok(res.into_json()?)
     }
@@ -318,12 +319,9 @@ impl Client {
         params: T,
     ) -> Result<UpsertResponse, Error> {
         let res = self.sfdc_post(
-            format!(
-                "{}/sobjects/{}", 
-                self.base_path(), 
-                sobject_type
-            ), 
-            params)?;
+            format!("{}/sobjects/{}", self.base_path(), sobject_type),
+            params,
+        )?;
         Ok(res.into_json()?)
     }
 
@@ -334,11 +332,8 @@ impl Client {
         records: Vec<T>,
     ) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
         let res = self.sfdc_post(
-            format!(
-                "{}/composite/sobjects", 
-                self.base_path(),
-            ), 
-            self.get_composite_body_request(all_or_none, records)
+            format!("{}/composite/sobjects", self.base_path(),),
+            self.get_composite_body_request(all_or_none, records),
         )?;
 
         Ok(self.partition_composite_results(res)?)
@@ -352,13 +347,8 @@ impl Client {
         params: T,
     ) -> Result<(), Error> {
         self.sfdc_patch(
-            format!(
-                "{}/sobjects/{}/{}", 
-                self.base_path(), 
-                sobject_type, 
-                id
-            ), 
-            params
+            format!("{}/sobjects/{}/{}", self.base_path(), sobject_type, id),
+            params,
         )?;
         Ok(())
     }
@@ -370,11 +360,8 @@ impl Client {
         records: Vec<T>,
     ) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
         let res = self.sfdc_patch(
-            format!(
-                "{}/composite/sobjects", 
-                self.base_path(),
-            ), 
-            self.get_composite_body_request(all_or_none, records)
+            format!("{}/composite/sobjects", self.base_path(),),
+            self.get_composite_body_request(all_or_none, records),
         )?;
 
         Ok(self.partition_composite_results(res)?)
@@ -395,7 +382,7 @@ impl Client {
                 sobject_type,
                 key_name,
                 key
-            ), 
+            ),
             params,
         )?;
 
@@ -415,30 +402,30 @@ impl Client {
     ) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
         let res = self.sfdc_patch(
             format!(
-                "{}/composite/sobjects/{}/{}", 
-                self.base_path(), 
-                sobject_type, 
+                "{}/composite/sobjects/{}/{}",
+                self.base_path(),
+                sobject_type,
                 key_name,
-            ), 
-            self.get_composite_body_request(all_or_none, records)
+            ),
+            self.get_composite_body_request(all_or_none, records),
         )?;
 
         Ok(self.partition_composite_results(res)?)
     }
 
-    fn get_composite_body_request<T>(&self, all_or_none: bool, records: Vec<T>) -> CompositeBodyRequest<T> {
+    fn get_composite_body_request<T>(
+        &self,
+        all_or_none: bool,
+        records: Vec<T>,
+    ) -> CompositeBodyRequest<T> {
         CompositeBodyRequest {
             all_or_none: all_or_none,
-            records: records.into()
+            records: records.into(),
         }
     }
 
     /// Deletes an SObject
-    pub fn delete(
-        &self, 
-        sobject_type: &str, 
-        id: &str,
-    ) -> Result<(), Error> {
+    pub fn delete(&self, sobject_type: &str, id: &str) -> Result<(), Error> {
         let resource_url = format!("{}/sobjects/{}/{}", self.base_path(), sobject_type, id);
         self.sfdc_delete(resource_url, None)?;
         Ok(())
@@ -446,13 +433,13 @@ impl Client {
 
     /// Deletes multiple SObjects
     pub fn deletes(
-        &self, 
-        all_or_none: bool, 
+        &self,
+        all_or_none: bool,
         ids: Vec<String>,
     ) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
         let resource_url = format!("{}/composite/sobjects", self.base_path());
         let res = self.sfdc_delete(
-            resource_url, 
+            resource_url,
             Some(vec![
                 ("ids", &ids.join(",")),
                 ("allOrNone", &all_or_none.to_string()),
@@ -462,27 +449,39 @@ impl Client {
         Ok(self.partition_composite_results(res)?)
     }
 
-    fn partition_composite_results(&self, res: Response) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
+    fn partition_composite_results(
+        &self,
+        res: Response,
+    ) -> Result<Vec<Result<CompositeResponse, Error>>, Error> {
         let status = res.status();
         let url = res.get_url().to_string();
 
         let vec_response: Vec<CompositeResponse> = res.into_json()?;
-        let results = vec_response.into_iter().map(|response| {
-            if response.success || response.errors.is_empty() {
-                Ok(response)
-            } else {
-                Err(Error::SfdcError { 
-                    status, 
-                    url: url.to_string(),
-                    sfdc_errors: Some(response.errors.into_iter().map(|error| ErrorResponse{
-                        message: error.message,
-                        error_code: error.status_code,
-                        fields: Some(error.fields),
-                    }).collect()), 
-                    transport_error: None,
-                })
-            }
-        }).collect();
+        let results = vec_response
+            .into_iter()
+            .map(|response| {
+                if response.success || response.errors.is_empty() {
+                    Ok(response)
+                } else {
+                    Err(Error::SfdcError {
+                        status,
+                        url: url.to_string(),
+                        sfdc_errors: Some(
+                            response
+                                .errors
+                                .into_iter()
+                                .map(|error| ErrorResponse {
+                                    message: error.message,
+                                    error_code: error.status_code,
+                                    fields: Some(error.fields),
+                                })
+                                .collect(),
+                        ),
+                        transport_error: None,
+                    })
+                }
+            })
+            .collect();
 
         Ok(results)
     }
@@ -502,8 +501,8 @@ impl Client {
     }
 
     pub fn sfdc_get(
-        &self, 
-        url_or_path: String, 
+        &self,
+        url_or_path: String,
         params: Option<Vec<(&str, &str)>>,
     ) -> Result<Response, Error> {
         let mut req = self
@@ -523,11 +522,7 @@ impl Client {
         Ok(req.call()?)
     }
 
-    pub fn sfdc_post<T: Serialize>(
-        &self, 
-        url_or_path: String, 
-        body: T,
-    ) -> Result<Response, Error> {
+    pub fn sfdc_post<T: Serialize>(&self, url_or_path: String, body: T) -> Result<Response, Error> {
         let res = self
             .http_client
             .post(&self.get_sfdc_url(url_or_path))
@@ -538,8 +533,8 @@ impl Client {
     }
 
     pub fn sfdc_patch<T: Serialize>(
-        &self, 
-        url_or_path: String, 
+        &self,
+        url_or_path: String,
         body: T,
     ) -> Result<Response, Error> {
         let res = self
@@ -551,11 +546,7 @@ impl Client {
         Ok(res)
     }
 
-    pub fn sfdc_put<T: Serialize>(
-        &self, 
-        url_or_path: String, 
-        body: T,
-    ) -> Result<Response, Error> {
+    pub fn sfdc_put<T: Serialize>(&self, url_or_path: String, body: T) -> Result<Response, Error> {
         let res = self
             .http_client
             .put(&self.get_sfdc_url(url_or_path))
@@ -566,8 +557,8 @@ impl Client {
     }
 
     pub fn sfdc_delete(
-        &self, 
-        url_or_path: String, 
+        &self,
+        url_or_path: String,
         params: Option<Vec<(&str, &str)>>,
     ) -> Result<Response, Error> {
         let mut req = self
@@ -628,7 +619,8 @@ mod tests {
     #[test]
     fn login_with_credentials() -> Result<(), Error> {
         let mut server = MockServer::new();
-        let _m = server.mock("POST", "/services/oauth2/token")
+        let _m = server
+            .mock("POST", "/services/oauth2/token")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -647,8 +639,7 @@ mod tests {
         let mut client = super::Client::new(Some("aaa".to_string()), Some("bbb".to_string()));
         let url = &MockServer::url(&server);
         client.set_login_endpoint(url);
-        client
-            .login_with_credential("u".to_string(), "p".to_string())?;
+        client.login_with_credential("u".to_string(), "p".to_string())?;
         let token = client.access_token.unwrap();
         assert_eq!("this_is_access_token", token.value);
         assert_eq!("Bearer", token.token_type);
@@ -661,29 +652,30 @@ mod tests {
     #[test]
     fn query() -> Result<(), Error> {
         let mut server = MockServer::new_with_port(0);
-        let _m = server.mock(
-            "GET",
-            "/services/data/v56.0/query/",
-        )
-        .match_query(mockito::Matcher::UrlEncoded("q".into(), "SELECT Id, Name FROM Account".into()))
-        .with_status(200)
-        .with_header("content-type", "application/json")
-        .with_body(
-            json!({
-                "totalSize": 123,
-                "done": true,
-                "records": vec![
-                    Account {
-                        id: "123".to_string(),
-                        name: "foo".to_string(),
-                    },
-                ]
-            })
-            .to_string(),
-        )
-        .create();
+        let _m = server
+            .mock("GET", "/services/data/v56.0/query/")
+            .match_query(mockito::Matcher::UrlEncoded(
+                "q".into(),
+                "SELECT Id, Name FROM Account".into(),
+            ))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                json!({
+                    "totalSize": 123,
+                    "done": true,
+                    "records": vec![
+                        Account {
+                            id: "123".to_string(),
+                            name: "foo".to_string(),
+                        },
+                    ]
+                })
+                .to_string(),
+            )
+            .create();
 
-        let client = create_test_client(&server); 
+        let client = create_test_client(&server);
         let r: QueryResponse<Account> = client.query("SELECT Id, Name FROM Account")?;
         assert_eq!(123, r.total_size);
         assert_eq!(true, r.done);
@@ -696,21 +688,21 @@ mod tests {
     #[test]
     fn insert() -> Result<(), Error> {
         let mut server = MockServer::new_with_port(0);
-        let _m = server.mock("POST", "/services/data/v56.0/sobjects/Account")
+        let _m = server
+            .mock("POST", "/services/data/v56.0/sobjects/Account")
             .with_status(201)
             .with_header("content-type", "application/json")
             .with_body(
                 json!({
-                                "id": "12345",
-                                "success": true,
-                            })
+                    "id": "12345",
+                    "success": true,
+                })
                 .to_string(),
             )
             .create();
 
         let client = create_test_client(&server);
-        let r = client
-            .insert("Account", [("Name", "foo"), ("Abc__c", "123")])?;
+        let r = client.insert("Account", [("Name", "foo"), ("Abc__c", "123")])?;
         assert_eq!("12345", r.id);
         assert_eq!(true, r.success);
 
@@ -720,14 +712,14 @@ mod tests {
     #[test]
     fn update() -> Result<(), Error> {
         let mut server = MockServer::new_with_port(0);
-        let _m = server.mock("PATCH", "/services/data/v56.0/sobjects/Account/123")
+        let _m = server
+            .mock("PATCH", "/services/data/v56.0/sobjects/Account/123")
             .with_status(204)
             .with_header("content-type", "application/json")
             .create();
 
         let client = create_test_client(&server);
-        let r = client
-            .update("Account", "123", [("Name", "foo"), ("Abc__c", "123")]);
+        let r = client.update("Account", "123", [("Name", "foo"), ("Abc__c", "123")]);
         assert_eq!(true, r.is_ok());
 
         Ok(())
@@ -736,20 +728,21 @@ mod tests {
     #[test]
     fn upsert_201() -> Result<(), Error> {
         let mut server = MockServer::new_with_port(0);
-        let _m = server.mock(
-            "PATCH",
-            "/services/data/v56.0/sobjects/Account/ExKey__c/123",
-        )
-        .with_status(201)
-        .with_header("content-type", "application/json")
-        .with_body(
-            json!({
-                            "id": "12345",
-                            "success": true,
-                        })
-            .to_string(),
-        )
-        .create();
+        let _m = server
+            .mock(
+                "PATCH",
+                "/services/data/v56.0/sobjects/Account/ExKey__c/123",
+            )
+            .with_status(201)
+            .with_header("content-type", "application/json")
+            .with_body(
+                json!({
+                    "id": "12345",
+                    "success": true,
+                })
+                .to_string(),
+            )
+            .create();
 
         let client = create_test_client(&server);
         let r = client
@@ -771,13 +764,14 @@ mod tests {
     #[test]
     fn upsert_204() -> Result<(), Error> {
         let mut server = MockServer::new_with_port(0);
-        let _m = server.mock(
-            "PATCH",
-            "/services/data/v56.0/sobjects/Account/ExKey__c/123",
-        )
-        .with_status(204)
-        .with_header("content-type", "application/json")
-        .create();
+        let _m = server
+            .mock(
+                "PATCH",
+                "/services/data/v56.0/sobjects/Account/ExKey__c/123",
+            )
+            .with_status(204)
+            .with_header("content-type", "application/json")
+            .create();
 
         let client = create_test_client(&server);
         let r = client
@@ -796,7 +790,8 @@ mod tests {
     #[test]
     fn delete() -> Result<(), Error> {
         let mut server = MockServer::new_with_port(0);
-        let _m = server.mock("DELETE", "/services/data/v56.0/sobjects/Account/123")
+        let _m = server
+            .mock("DELETE", "/services/data/v56.0/sobjects/Account/123")
             .with_status(204)
             .with_header("content-type", "application/json")
             .create();
@@ -811,7 +806,8 @@ mod tests {
     #[test]
     fn versions() -> Result<(), Error> {
         let mut server = MockServer::new_with_port(0);
-        let _m = server.mock("GET", "/services/data/")
+        let _m = server
+            .mock("GET", "/services/data/")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -836,7 +832,8 @@ mod tests {
     #[test]
     fn find_by_id() -> Result<(), Error> {
         let mut server = MockServer::new_with_port(0);
-        let _m = server.mock("GET", "/services/data/v56.0/sobjects/Account/123")
+        let _m = server
+            .mock("GET", "/services/data/v56.0/sobjects/Account/123")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
