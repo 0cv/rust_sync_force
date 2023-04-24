@@ -866,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "rust_sync_force"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "cargo-license",
