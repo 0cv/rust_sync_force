@@ -13,6 +13,9 @@ pub enum Error {
         transport_error: Option<String>,
     },
 
+    #[error("Error: {0}")]
+    GenericError(String),
+
     #[error("Input Output Error {0}")]
     IOError(#[from] ::std::io::Error),
 }

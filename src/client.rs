@@ -19,7 +19,7 @@ pub struct Client {
     login_endpoint: String,
     instance_url: Option<String>,
     access_token: Option<AccessToken>,
-    version: String,
+    pub version: String,
 }
 
 impl Client {

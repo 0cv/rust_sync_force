@@ -3,10 +3,10 @@ name: Rust
 on:
   push:
     branches:
-    - master
+      - master
   pull_request:
     branches:
-    - master
+      - master
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,26 +17,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose --lib
-  
+      - uses: actions/checkout@v2
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose --lib
+
   integration_tests:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: ["build"]
     env:
       SFDC_CLIENT_ID: ${{ secrets.SFDC_CLIENT_ID }}
-      SFDC_CLIENT_SECRET: ${{ secrets.SFDC_CLIENT_SECRET }} 
+      SFDC_CLIENT_SECRET: ${{ secrets.SFDC_CLIENT_SECRET }}
       SFDC_USERNAME: ${{ secrets.SFDC_USERNAME }}
       SFDC_PASSWORD: ${{ secrets.SFDC_PASSWORD }}
     steps:
-    - uses: actions/checkout@v2
-    - name: Run tests
-      run: |
-        cargo test --test integration_test
-
-    
-    
+      - uses: actions/checkout@v2
+      - name: Run tests
+        run: |
+          cargo test --test integration_test

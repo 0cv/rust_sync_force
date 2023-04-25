@@ -4,9 +4,9 @@
 
 ## Rust Sync Force
 
-Salesforce Client for Rust Sync.
+Salesforce Client for Rust Sync. Support most Salesforce REST methods. Also supports Change Data Capture.
 
-Async version is here https://github.com/tzmfreedom/rustforce
+Rust async version is here https://github.com/tzmfreedom/rustforce
 
 ## Usage
 
@@ -178,4 +178,63 @@ let versions = client.versions()?;
 
 ```rust
 let r = client.search("FIND {Rust}")?;
+```
+
+### Change Data Capture - Streaming
+
+```rust
+let mut client = Client::new(client_id, client_secret);
+client.login_with_credential(username, password)?;
+
+let mut stream_client = rust_sync_force::stream::CometdClient::new(
+    client,
+
+    // listen to Account Change Event
+    vec!["/data/AccountChangeEvent".to_string()],
+);
+
+stream_client.init().expect("Could not init cometd client");
+
+println!("Cometd client successfully initialized");
+
+for response in stream_client.connect()? {
+    if let StreamResponse::Delivery(delivery) = response {
+        match serde_json::from_value::<SFMetadata>(delivery.data.clone()) {
+            Ok(data) => {
+                println!("Data: {:#?}", data);
+                // Here you should have your patterns matching your own objects
+            }
+            Err(err) => {
+                println!(
+                    "SF delivery data could not be parsed: {:?}\nData:{:?}",
+                    err, delivery
+                )
+            }
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SFChangeEventHeader {
+    pub commitNumber: usize,
+    pub commitUser: String,
+    pub sequenceNumber: usize,
+    pub entityName: String,
+    pub changeType: String,
+    pub commitTimestamp: usize,
+    pub recordIds: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SFPayload {
+    pub LastModifiedDate: String,
+    pub ChangeEventHeader: SFChangeEventHeader,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SFMetadata {
+    pub schema: String,
+    pub payload: SFPayload,
+}
+
 ```
