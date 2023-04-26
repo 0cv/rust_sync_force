@@ -1,7 +1,5 @@
-// use reqwest::{Client as ReqwestClient, Response as ReqwestReponse, Url};
 use serde::Serialize;
-// use serde_json::json;
-// use std::time::Duration;
+use std::collections::HashMap;
 use ureq::Response;
 
 use crate::client::Client;
@@ -18,7 +16,7 @@ pub struct CometdClient {
     stream_client_id: Option<String>,
     max_retries: i8,
     actual_retries: i8,
-    subscriptions: Vec<String>,
+    subscriptions: HashMap<String, i64>,
 }
 
 #[derive(Serialize, Debug)]
@@ -50,6 +48,15 @@ struct SubscribeTopicPayload<'a> {
     pub channel: &'a str,
     pub client_id: &'a str,
     pub subscription: &'a str,
+
+    // ext : { "replay" : { CHANNEL : REPLAY_VALUE }}
+    pub ext: Option<ExtReplay>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ExtReplay {
+    pub replay: HashMap<String, i64>,
 }
 
 #[derive(Serialize, Debug)]
@@ -65,13 +72,13 @@ where
 
 impl CometdClient {
     /// Creates a new cometd client.
-    pub fn new(client: Client, subscriptions: Vec<String>) -> CometdClient {
+    pub fn new(client: Client, subscriptions: HashMap<String, i64>) -> CometdClient {
         CometdClient {
             client,
             stream_client_id: None,
             actual_retries: 0,
             max_retries: 3,
-            subscriptions: subscriptions,
+            subscriptions,
         }
     }
 
@@ -194,18 +201,24 @@ impl CometdClient {
                                 responses.push(stream_response);
                             }
                         }
+                        StreamResponse::Handshake(handshake_response) => {
+                            self.stream_client_id = Some(handshake_response.client_id.clone());
+                            responses.push(StreamResponse::Handshake(handshake_response));
+                        }
+                        StreamResponse::Delivery(delivery_response) => {
+                            self.subscriptions.insert(
+                                delivery_response.channel.clone(),
+                                delivery_response.data.event.replay_id,
+                            );
+                            responses.push(StreamResponse::Delivery(delivery_response));
+                        }
+
+                        // Publish | Basic
                         _ => {
                             if let Some(ref advice) = stream_response.advice() {
                                 for stream_response in self.handle_advice(advice, None)? {
                                     responses.push(stream_response);
                                 }
-                            } else {
-                                if let StreamResponse::Handshake(ref stream_response) =
-                                    stream_response
-                                {
-                                    self.stream_client_id = Some(stream_response.client_id.clone());
-                                }
-                                responses.push(stream_response);
                             }
                         }
                     }
@@ -213,7 +226,7 @@ impl CometdClient {
                 Ok(responses)
             }
             Err(e) => Err(Error::GenericError(format!(
-                "Could not parse response: {}",
+                "Could not parse response: {:#?}",
                 e
             ))),
         }
@@ -242,7 +255,9 @@ impl CometdClient {
     pub fn connect(&mut self) -> Result<Vec<StreamResponse>, Error> {
         let resps = self.retry();
 
-        self.actual_retries = 0;
+        if resps.is_ok() {
+            self.actual_retries = 0;
+        }
         resps
     }
 
@@ -296,11 +311,15 @@ impl CometdClient {
     pub fn subscribe(&mut self) -> Result<(), Error> {
         match self.stream_client_id.clone() {
             Some(client_id) => {
-                for subscription in self.subscriptions.clone() {
+                for (subscription, replay_id) in self.subscriptions.clone() {
+                    println!("Subscribing with replay id {}", replay_id);
                     let response = self.send_request(&SubscribeTopicPayload {
                         channel: "/meta/subscribe",
                         client_id: &client_id,
                         subscription: &subscription,
+                        ext: Some(ExtReplay {
+                            replay: HashMap::from([(subscription.clone(), replay_id)]),
+                        }),
                     })?;
 
                     self.handle_response(response)?;
@@ -334,6 +353,7 @@ impl CometdClient {
                     channel: "/meta/unsubscribe",
                     client_id,
                     subscription,
+                    ext: None,
                 })?;
 
                 self.handle_response(response)
@@ -382,6 +402,7 @@ impl CometdClient {
 mod tests {
     use mockito::Server as MockServer;
     use serde_json::json;
+    use std::collections::HashMap;
 
     use super::CometdClient;
     use crate::Client;
@@ -393,7 +414,7 @@ mod tests {
         let url = MockServer::url(&server);
         client.set_instance_url(&url);
         client.set_access_token("this_is_access_token");
-        CometdClient::new(client, vec![]).set_retries(RETRIES_MAX)
+        CometdClient::new(client, HashMap::new()).set_retries(RETRIES_MAX)
     }
 
     mod init {

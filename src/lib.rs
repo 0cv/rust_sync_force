@@ -56,7 +56,7 @@
 //! use rust_sync_force::stream::{CometdClient, StreamResponse};
 //! use rust_sync_force::{Client, Error};
 //! use serde::Deserialize;
-//! use std::env;
+//! use std::{collections::HashMap, env};
 
 //! #[derive(Debug, Deserialize)]
 //! #[allow(non_snake_case)]
@@ -77,12 +77,6 @@
 //!     pub ChangeEventHeader: SFChangeEventHeader,
 //! }
 
-//! #[derive(Debug, Deserialize)]
-//! pub struct SFMetadata {
-//!     pub schema: String,
-//!     pub payload: SFPayload,
-//! }
-
 //! pub fn listen_sf(mut client: CometdClient) {
 //!     println!("Listen SF loop started");
 //!     loop {
@@ -92,7 +86,7 @@
 //!             Ok(responses) => {
 //!                 for response in responses {
 //!                     if let StreamResponse::Delivery(resp) = response {
-//!                         match serde_json::from_value::<SFMetadata>(resp.data.clone()) {
+//!                         match serde_json::from_value::<SFMetadata>(resp.data.payload.clone()) {
 //!                             Ok(data) => {
 //!                                 println!("Data: {:#?}", data);
 //!                                 //! Here you should have your patterns matching your own objects
@@ -123,7 +117,7 @@
 
 //!     let mut stream_client = rust_sync_force::stream::CometdClient::new(
 //!         client,
-//!         vec!["/data/AccountChangeEvent".to_string()],
+//!         HashMap::from([("/data/AccountChangeEvent".to_string(), -1)]),
 //!     );
 
 //!     stream_client.init().expect("Could not init cometd client");

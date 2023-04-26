@@ -68,9 +68,24 @@ pub struct PublishResponse {
 pub struct DeliveryResponse {
     pub channel: String,
     pub advice: Option<Advice>,
-    pub data: serde_json::Value,
+    pub data: Data,
     pub ext: Option<serde_json::Value>,
     pub id: Option<String>,
+}
+
+#[derive(Deserialize, PartialEq, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Data {
+    pub event: Event,
+    pub payload: serde_json::Value,
+}
+
+/// This response is returned when a message is send to a channel the client
+/// is subscribed to.
+#[derive(Deserialize, PartialEq, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Event {
+    pub replay_id: i64,
 }
 
 /// Represents a response from the cometd server.
