@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
@@ -20,7 +21,7 @@ pub struct UpsertResponse {
 pub struct CompositeResponse {
     pub id: Option<String>,
     pub success: bool,
-    pub errors: Vec<RecordErrorResponse>
+    pub errors: Vec<RecordErrorResponse>,
 }
 
 #[derive(Serialize, Debug)]
@@ -39,7 +40,7 @@ pub struct RecordRequest<T> {
 #[serde(rename_all = "camelCase")]
 pub struct CompositeBodyRequest<T> {
     pub all_or_none: bool,
-    pub records: Vec<T>
+    pub records: Vec<T>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -67,7 +68,7 @@ pub struct TokenErrorResponse {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorResponse {
-    pub message: String,
+    pub message: Value,
     pub error_code: String,
     pub fields: Option<Vec<String>>,
 }

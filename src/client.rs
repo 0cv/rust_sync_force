@@ -9,6 +9,7 @@ use crate::utils::substring_before;
 use regex::Regex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde_json::Value;
 use ureq::Response;
 
 /// Represents a Salesforce Client
@@ -125,7 +126,7 @@ impl Client {
                     url: url,
                     transport_error: None,
                     sfdc_errors: Some(vec![ErrorResponse {
-                        message: error_response.error_description,
+                        message: Value::String(error_response.error_description),
                         error_code: error_response.error,
                         fields: None,
                     }]),
@@ -206,14 +207,14 @@ impl Client {
                     url: url,
                     transport_error: None,
                     sfdc_errors: Some(vec![ErrorResponse {
-                        message: String::from(
+                        message: Value::String(String::from(
                             re_message
                                 .captures(body_response.as_str())
                                 .unwrap()
                                 .get(1)
                                 .unwrap()
                                 .as_str(),
-                        ),
+                        )),
                         error_code: String::from(
                             re_error_code
                                 .captures(body_response.as_str())
@@ -471,7 +472,7 @@ impl Client {
                                 .errors
                                 .into_iter()
                                 .map(|error| ErrorResponse {
-                                    message: error.message,
+                                    message: Value::String(error.message),
                                     error_code: error.status_code,
                                     fields: Some(error.fields),
                                 })

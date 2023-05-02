@@ -1,3 +1,5 @@
+use serde_json::Value;
+
 use crate::response::ErrorResponse;
 
 #[derive(Debug, thiserror::Error)]
@@ -25,9 +27,13 @@ impl From<ureq::Error> for Error {
         match e {
             ureq::Error::Status(status, response) => {
                 let url = response.get_url().to_string();
-                let response_string = format!("{:?}", response.into_string());
+                let message = if let Ok(response_value) = response.into_json::<Value>() {
+                    response_value
+                } else {
+                    Value::String("".to_string())
+                };
                 let error_response = ErrorResponse {
-                    message: response_string,
+                    message,
                     error_code: "".to_string(),
                     fields: None,
                 };
