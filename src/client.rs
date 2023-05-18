@@ -172,8 +172,10 @@ impl Client {
         {
             Ok(res) => {
                 let body_response = res.into_string()?;
-                let re_access_token = Regex::new(r"<sessionId>([^<]+)</sessionId>").unwrap();
-                let re_instance_url = Regex::new(r"<serverUrl>([^<]+)</serverUrl>").unwrap();
+                let re_access_token = Regex::new(r"<sessionId>([^<]+)</sessionId>")
+                    .expect(&format!("Session ID is missing: '{}'", body_response).to_string());
+                let re_instance_url = Regex::new(r"<serverUrl>([^<]+)</serverUrl>")
+                    .expect(&format!("Server URL is missing: '{}'", body_response).to_string());
                 self.access_token = Some(AccessToken {
                     value: String::from(
                         re_access_token
@@ -200,8 +202,11 @@ impl Client {
             Err(ureq::Error::Status(code, response)) => {
                 let url = response.get_url().to_string();
                 let body_response = response.into_string()?;
-                let re_message = Regex::new(r"<faultstring>([^<]+)</faultstring>").unwrap();
-                let re_error_code = Regex::new(r"<faultcode>([^<]+)</faultcode>").unwrap();
+                println!("Error Code: {}. Error Response: {}", code, body_response);
+                let re_message = Regex::new(r"<faultstring>([^<]+)</faultstring>")
+                    .expect(&format!("Faultstring is missing: '{}'", body_response).to_string());
+                let re_error_code = Regex::new(r"<faultcode>([^<]+)</faultcode>")
+                    .expect(&format!("Faultcode is missing: '{}'", body_response).to_string());
                 Err(Error::SfdcError {
                     status: code,
                     url: url,
