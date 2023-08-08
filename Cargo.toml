@@ -1,6 +1,6 @@
 [package]
 name = "rust_sync_force"
-version = "0.3.1"
+version = "0.3.2"
 license = "MIT"
 description = "Salesforce Sync REST API Client"
 documentation = "https://docs.rs/rust_sync_force"

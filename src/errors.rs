@@ -27,10 +27,11 @@ impl From<ureq::Error> for Error {
         match e {
             ureq::Error::Status(status, response) => {
                 let url = response.get_url().to_string();
+                let response_string = format!("{:?}", response);
                 let message = if let Ok(response_value) = response.into_json::<Value>() {
                     response_value
                 } else {
-                    Value::String("".to_string())
+                    Value::String(response_string)
                 };
                 let error_response = ErrorResponse {
                     message,
